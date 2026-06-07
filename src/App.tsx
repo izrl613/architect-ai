@@ -22,7 +22,7 @@ import {
   Shield, ShieldCheck, ShieldAlert, Cpu, KeyRound, Lock, Unlock, 
   MessageSquare, HardDrive, Wifi, WifiOff, Scan, RefreshCw, 
   Settings, HelpCircle, Activity, ChevronRight, AlertTriangle, Play,
-  User, CheckCircle2, CloudLightning, FileText, Trash2, ShieldX, LogIn
+  User, CheckCircle2, CloudLightning, FileText, Trash2, ShieldX, LogIn, LayoutGrid as LayoutGridIcon, Cloud
 } from 'lucide-react';
 
 export default function App() {
@@ -59,10 +59,142 @@ export default function App() {
   const [isDiagnosticRunning, setIsDiagnosticRunning] = useState(false);
   const [diagnosticMessage, setDiagnosticMessage] = useState('');
   const [systemSuggestions, setSystemSuggestions] = useState<string[]>([]);
+  const [showReportModal, setShowReportModal] = useState(false);
+  // Scheduling for automated security scans
+  const [scanInterval, setScanInterval] = useState<number | null>(null); // minutes
+  const scanTimerRef = useRef<number | null>(null);
 
   // Real-world breach exposure state & simulation variables
   const [breachStatus, setBreachStatus] = useState<'exposed' | 'nuked'>('exposed');
-  const [showReportModal, setShowReportModal] = useState(false);
+  const [cloudSync, setCloudSync] = useState<{status:'success'|'warning'|'error', timestamp:string}>({status:'success', timestamp:new Date().toISOString()});
+  // Backup toast state
+  const [showBackupToast, setShowBackupToast] = useState(false);
+
+  // Check backup age on mount / status change
+  useEffect(() => {
+    if (cloudSync.timestamp) {
+      const last = new Date(cloudSync.timestamp);
+      const now = new Date();
+      const diffMs = now - last;
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      if (diffDays > 7) {
+        setShowBackupToast(true);
+      } else {
+        setShowBackupToast(false);
+      }
+    }
+  }, [cloudSync.timestamp]);
+  // Idle auto-lock timer (10 minutes inactivity)
+  const idleTimeoutRef = useRef<number | null>(null);
+
+  const idleDelay = 10 * 60 * 1000; // 10 minutes in ms
+
+  const resetIdleTimer = () => {
+    if (idleTimeoutRef.current) {
+      clearTimeout(idleTimeoutRef.current);
+    }
+    idleTimeoutRef.current = setTimeout(() => {
+      setIsLocked(true);
+      triggerAuditLog(
+        'Idle Lock Activated',
+        'identity',
+        'warning',
+        'Application auto-locked after 10 minutes of inactivity.'
+      );
+    }, idleDelay);
+  };
+
+  useEffect(() => {
+    const events = ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll'];
+    const handler = () => resetIdleTimer();
+    events.forEach(ev => window.addEventListener(ev, handler));
+    // Start the timer initially
+    resetIdleTimer();
+    return () => {
+      events.forEach(ev => window.removeEventListener(ev, handler));
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Automated scan scheduler
+  useEffect(() => {
+    // Clear any existing timer
+    if (scanTimerRef.current) {
+      clearInterval(scanTimerRef.current);
+    }
+    if (scanInterval && scanInterval > 0) {
+      // Set interval in milliseconds
+      const intervalMs = scanInterval * 60 * 1000;
+      scanTimerRef.current = setInterval(() => {
+        // Avoid overlapping diagnostics
+        if (!isDiagnosticRunning) {
+          handleRunDiagnostic();
+        }
+      }, intervalMs);
+    }
+    // Cleanup on unmount or interval change
+    return () => {
+      if (scanTimerRef.current) {
+        clearInterval(scanTimerRef.current);
+        scanTimerRef.current = null;
+      }
+    };
+  }, [scanInterval, isDiagnosticRunning]);
+
+  // Perform immediate backup action
+  const handleBackupNow = () => {
+    // Simulate backup operation and update state
+    setCloudSync({status:'success', timestamp:new Date().toISOString()});
+    setShowBackupToast(false);
+    // Optionally persist to localStorage
+    localStorage.setItem('aegis_cloud_sync', JSON.stringify({status:'success', timestamp:new Date().toISOString()}));
+  };
+
+  // Generate downloadable security report (TXT)
+  const downloadJsonReport = () => {
+    const reportData = {
+      currentUser: currentUser,
+      breachStatus: breachStatus,
+      cloudSync: cloudSync,
+      auditLogs: auditLogs,
+      systemSuggestions: systemSuggestions,
+      modules: modules,
+      passwords: passwords,
+      vaultItems: vaultItems,
+      blockedTrackers: blockedTrackers,
+      stats: stats,
+      generatedAt: new Date().toISOString()
+    };
+    const jsonStr = JSON.stringify(reportData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'threat_report.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+    const reportLines = [];
+    reportLines.push('Sovereign Encryption & Exposure Report');
+    reportLines.push('Generated: ' + new Date().toISOString());
+    reportLines.push('---');
+    reportLines.push(`Current User: ${currentUser?.email || 'N/A'}`);
+    reportLines.push(`Breach Status: ${breachStatus}`);
+    reportLines.push(`Cloud Sync: ${cloudSync.status} (last updated ${cloudSync.timestamp})`);
+    // Add more details as needed, e.g., audit logs count
+    reportLines.push(`Audit Log Entries: ${auditLogs.length}`);
+    const content = reportLines.join('\n');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'security_report.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const [nukeProgress, setNukeProgress] = useState(0);
   const [isNuking, setIsNuking] = useState(false);
   const [stats, setStats] = useState({ nuked: 1, knoxed: 0, monitored: 1 });
@@ -167,7 +299,33 @@ export default function App() {
     if (savedOffline) {
       setIsOffline(savedOffline === 'true');
     }
+    // Load Cloud Sync Health status
+    const savedSync = localStorage.getItem('aegis_cloud_sync');
+    if (savedSync) {
+      setCloudSync(JSON.parse(savedSync));
+    }
   }, []);
+
+  // Panic Lock Keyboard Shortcut (Cmd+L / Ctrl+L)
+  useEffect(() => {
+    const handlePanicLock = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        if (!isLocked) {
+          setIsLocked(true);
+          setCurrentUser(null);
+          triggerAuditLog(
+            'Panic Lock Activated',
+            'identity',
+            'warning',
+            'User triggered panic lock via keyboard shortcut'
+          );
+        }
+      }
+    };
+    window.addEventListener('keydown', handlePanicLock);
+    return () => window.removeEventListener('keydown', handlePanicLock);
+  }, [isLocked]);
 
   // Save changes to localStorage acting as automatically synced device enclaves
   const saveState = (key: string, data: any) => {
@@ -269,7 +427,27 @@ export default function App() {
     return Math.max(0, Math.min(99, Math.round(score)));
   };
 
-  const overallScore = calculateSecurityScore();
+    const overallScore = calculateSecurityScore();
+  // Animated display score for smooth transitions
+  const [displayScore, setDisplayScore] = useState(overallScore);
+  const prevScoreRef = useRef(overallScore);
+  useEffect(() => {
+    const start = prevScoreRef.current;
+    const end = overallScore;
+    if (start === end) return;
+    const duration = 800; // ms
+    const startTime = performance.now();
+    const step = (now) => {
+      const progress = Math.min((now - startTime) / duration, 1);
+      setDisplayScore(Math.round(start + (end - start) * progress));
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        prevScoreRef.current = end;
+      }
+    };
+    requestAnimationFrame(step);
+  }, [overallScore]);
 
   // Run detailed diagnostic checking cryptographic enclaves
   const handleRunDiagnostic = () => {
@@ -509,7 +687,7 @@ export default function App() {
                 {/* Score indicators */}
                 <div className="flex items-center gap-2 font-mono">
                   <span className="text-[10px] font-black tracking-widest text-[#10b981] bg-emerald-950/40 border border-emerald-900/40 px-2 py-0.5 rounded shadow">
-                    {overallScore} SCORE
+                    {displayScore} SCORE
                   </span>
                   
                   {/* Avatar Sphere */}
@@ -519,6 +697,12 @@ export default function App() {
                   </div>
 
                   {/* Immediate Lock Trigger */}
+                  <div className="flex items-center gap-1 mr-2">
+                    <Cloud className="h-3 w-3" style={{ color: cloudSync.status === 'success' ? '#10b981' : cloudSync.status === 'warning' ? '#fbbf24' : '#ef4444' }} />
+                    <span className="text-[9px] font-mono" style={{ color: cloudSync.status === 'success' ? '#10b981' : cloudSync.status === 'warning' ? '#fbbf24' : '#ef4444' }}>
+                      Cloud Sync {cloudSync.status === 'success' ? 'Healthy' : cloudSync.status === 'warning' ? 'Degraded' : 'Failed'}
+                    </span>
+                  </div>
                   <button
                     onClick={() => {
                       setIsLocked(true);
@@ -652,6 +836,22 @@ export default function App() {
                             >
                               NUKE EXPOSURE
                             </button>
+                            {/* Schedule Automated Scan */}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="1"
+                                placeholder="Minutes"
+                                value={scanInterval ?? ''}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10);
+                                  if (!isNaN(val) && val > 0) setScanInterval(val);
+                                  else setScanInterval(null);
+                                }}
+                                className="w-16 px-1 py-0.5 text-xs bg-neutral-900 border border-neutral-700 rounded text-neutral-300 focus:outline-none"
+                              />
+                              <span className="text-xs text-neutral-400">/ scan</span>
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -673,6 +873,25 @@ export default function App() {
                         </div>
                       )}
                     </div>
+
+                    {/* Breach Exposure Timeline */}
+                        <div className="mt-6 px-5 pb-5">
+                          <h2 className="text-sm font-black text-neutral-300 uppercase mb-3">Breach Exposure Timeline</h2>
+                          <div className="border-l border-neutral-700 pl-4 space-y-4">
+                            {auditLogs.map((log) => (
+                              <div key={log.id} className="flex items-start gap-2">
+                                <div className="w-2 h-2 rounded-full bg-fuchsia-400 mt-1"></div>
+                                <div>
+                                  <span className="text-xs text-neutral-500 mr-2">{log.timestamp}</span>
+                                  <span className="font-mono text-neutral-300">{log.title}</span>
+                                  {log.message && (
+                                    <span className="block text-xs text-neutral-400">{log.message}</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
 
                     <div className="p-3 bg-neutral-950/80 border-t border-neutral-850 flex items-center justify-between gap-3 text-[10px] font-mono">
                       <span className="text-neutral-500">Sovereign Cleansing Tool version 2.4.9</span>
@@ -1076,6 +1295,13 @@ export default function App() {
                 >
                   [CLOSE]
                 </button>
+                <button
+                  onClick={downloadReport}
+                  className="p-1 text-xs text-neutral-500 hover:text-white cursor-pointer font-bold ml-2"
+                >
+                  [DOWNLOAD]
+                </button>
+                </div>
               </div>
 
               <div className="space-y-4 text-xs font-mono leading-relaxed max-h-[440px] overflow-y-auto custom-scrollbar bg-neutral-950 p-4 rounded-lg border border-neutral-850">
