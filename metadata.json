@@ -1,0 +1,6 @@
+{
+  "name": "All-in-One Privacy Suite",
+  "description": "Comprehensive security dashboard providing encrypted messaging, password manager, real-time tracker blocking, and a secure document/photo vault with 16 customizable identity modules.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
