@@ -171,30 +171,42 @@ export default function BiometricLock({ onUnlock, isInitiallyLocked }: Biometric
                 <span className="mt-4 text-xs font-mono tracking-widest uppercase text-emerald-400 font-bold">ENCLAVE DECRYPTED</span>
               </motion.div>
             ) : scanning ? (
-              <div className="flex flex-col items-center w-full">
-                <div className="relative h-20 w-20 flex items-center justify-center">
-                  <div className="absolute inset-0 rounded-full border border-neutral-800" />
-                  <motion.div 
-                    animate={{ y: [-35, 35, -35] }}
-                    transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                    className={`absolute left-2 right-2 h-0.5 ${authMethod === 'fingerprint' ? 'bg-fuchsia-500 shadow-[0_0_10px_#d946ef]' : 'bg-blue-500 shadow-[0_0_10px_#3b82f6]'}`}
-                  />
+            <div className="flex flex-col items-center w-full">
+              <div className="relative h-20 w-20 flex items-center justify-center">
+                {/* Rotating outer ring */}
+                <motion.div
+                  className="absolute inset-0 rounded-full border-2 border-current"
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                />
+                {/* Inner icon with pulsing effect */}
+                <motion.div
+                  className={`absolute inset-0 flex items-center justify-center ${authMethod === 'fingerprint' ? 'text-fuchsia-500' : 'text-blue-500'}`}
+                  animate={{ scale: [0.8, 1.2, 0.8] }}
+                  transition={{ repeat: Infinity, duration: 1.2, ease: "easeOut" }}
+                >
                   {authMethod === 'fingerprint' ? (
-                    <Fingerprint className="h-12 w-12 text-fuchsia-400 animate-pulse" />
+                    <Fingerprint className="h-12 w-12" />
                   ) : (
-                    <ScanFace className="h-12 w-12 text-blue-400 animate-pulse" />
+                    <ScanFace className="h-12 w-12" />
                   )}
-                </div>
-                
-                <div className="w-40 bg-neutral-800 h-1 rounded-full mt-5 overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-fuchsia-500 via-blue-500 to-orange-500 transition-all duration-100"
-                    style={{ width: `${scanProgress}%` }}
-                  />
-                </div>
-                <span className="text-[10px] text-neutral-500 font-mono mt-2">{scanProgress}% Computed</span>
+                </motion.div>
+                {/* Moving scan line */}
+                <motion.div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ background: "linear-gradient(transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)" }}
+                  animate={{ y: ["-50%", "150%"] }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                />
               </div>
-            ) : (
+              <div className="w-40 bg-neutral-800 h-1 rounded-full mt-5 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-fuchsia-500 via-blue-500 to-orange-500 transition-all duration-100"
+                  style={{ width: `${scanProgress}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-neutral-500 font-mono mt-2">{scanProgress}% Computed</span>
+            </div>  ) : (
               <div className="w-full">
                 {authMethod === 'fingerprint' && (
                   <motion.button

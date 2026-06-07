@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useMotionValue, animate } from 'motion/react';
 import { 
   IdentityModule, PasswordEntry, EncryptedMessage, VaultItem, TrackerLog, AuditLog 
 } from './types';
@@ -428,26 +428,24 @@ export default function App() {
   };
 
     const overallScore = calculateSecurityScore();
-  // Animated display score for smooth transitions
+  // Animated display score using Framer Motion for high-fidelity transitions
+  const motionScore = useMotionValue(overallScore);
   const [displayScore, setDisplayScore] = useState(overallScore);
-  const prevScoreRef = useRef(overallScore);
+
+  // Sync motion value to state for rendering
   useEffect(() => {
-    const start = prevScoreRef.current;
-    const end = overallScore;
-    if (start === end) return;
-    const duration = 800; // ms
-    const startTime = performance.now();
-    const step = (now) => {
-      const progress = Math.min((now - startTime) / duration, 1);
-      setDisplayScore(Math.round(start + (end - start) * progress));
-      if (progress < 1) {
-        requestAnimationFrame(step);
-      } else {
-        prevScoreRef.current = end;
-      }
-    };
-    requestAnimationFrame(step);
+    const unsubscribe = motionScore.onChange((v) => {
+      setDisplayScore(Math.round(v));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Animate when overallScore changes
+  useEffect(() => {
+    if (motionScore.get() === overallScore) return;
+    animate(motionScore, overallScore, { duration: 0.8, ease: 'easeOut' });
   }, [overallScore]);
+
 
   // Run detailed diagnostic checking cryptographic enclaves
   const handleRunDiagnostic = () => {
@@ -568,6 +566,15 @@ export default function App() {
 
   // Purge / Nuke Breach sequence simulation
   const handleNukeExplosion = () => {
+    // Save current state snapshot before nuking
+    const preNukeSnapshot = {
+      breachStatus,
+      stats,
+      passwords,
+      systemSuggestions,
+      auditLogs
+    };
+    localStorage.setItem('aegis_pre_nuke_snapshot', JSON.stringify(preNukeSnapshot));
     if (isNuking) return;
     setIsNuking(true);
     setNukeProgress(0);
@@ -602,25 +609,24 @@ export default function App() {
     }, 150);
   };
 
-  // KNOX all identity modules (enable MFA and elevate security standard)
-  const handleKnoxAllSovereign = () => {
-    const updated = modules.map(m => ({
-      ...m,
-      isActive: true,
-      mfaEnabled: true,
-      mfaSecret: m.mfaSecret || 'AEGIS-' + Math.random().toString(36).substring(3, 11).toUpperCase(),
-      protectionLevel: 'Paranoid' as const
-    }));
-    handleUpdateModules(updated);
-    setStats(prev => ({ ...prev, knoxed: 16 }));
-    triggerAuditLog(
-      'Aegis Enclaves Sealed (KNOX)',
-      'identity',
-      'secured',
-      'MFA successfully enforced across all 16 Virtual Identity Modules. Protection thresholds set to Paranoid.'
-    );
+  // Revert the last nuke by restoring snapshot from localStorage
+  const handleRevertNuke = () => {
+    const snapshotStr = localStorage.getItem('aegis_pre_nuke_snapshot');
+    if (!snapshotStr) {
+      triggerAuditLog('Revert Nuke Failed', 'identity', 'warning', 'No pre-nuke snapshot found in storage.');
+      return;
+    }
+    const snapshot = JSON.parse(snapshotStr);
+    // Restore states
+    setBreachStatus(snapshot.breachStatus || 'exposed');
+    setStats(snapshot.stats || { nuked: 1, knoxed: 0, monitored: 1 });
+    setPasswords(snapshot.passwords || []);
+    setSystemSuggestions(snapshot.systemSuggestions || []);
+    setAuditLogs(snapshot.auditLogs || []);
+    // Clear the snapshot after revert to prevent repeated restores
+    localStorage.removeItem('aegis_pre_nuke_snapshot');
+    triggerAuditLog('Nuke Reverted', 'identity', 'secured', 'Restored security state from pre-nuke snapshot.');
   };
-
   return (
     <div className="min-h-screen bg-black text-neutral-300 flex flex-col font-mono selection:bg-fuchsia-500/30 selection:text-white">
       
@@ -694,24 +700,18 @@ export default function App() {
                   <div className="h-8 w-8 rounded-full border-2 border-blue-500 bg-neutral-950 flex items-center justify-center font-bold text-xs text-blue-400 relative overflow-hidden group hover:border-fuchsia-500 transition-all cursor-pointer shadow-md">
                     <span className="relative z-10 font-bold font-sans">ID</span>
                     <div className="absolute inset-0 bg-neutral-900 layer opacity-10 group-hover:bg-fuchsia-950 transition-colors" />
-                  </div>
-
-                  {/* Immediate Lock Trigger */}
-                  <div className="flex items-center gap-1 mr-2">
-                    <Cloud className="h-3 w-3" style={{ color: cloudSync.status === 'success' ? '#10b981' : cloudSync.status === 'warning' ? '#fbbf24' : '#ef4444' }} />
-                    <span className="text-[9px] font-mono" style={{ color: cloudSync.status === 'success' ? '#10b981' : cloudSync.status === 'warning' ? '#fbbf24' : '#ef4444' }}>
-                      Cloud Sync {cloudSync.status === 'success' ? 'Healthy' : cloudSync.status === 'warning' ? 'Degraded' : 'Failed'}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setIsLocked(true);
-                      setCurrentUser(null);
-                    }}
-                    title="Shut down enclaves instantly"
-                    className="p-1 px-2.5 text-[9px] bg-red-950/20 text-red-500 border border-red-500/30 rounded font-bold uppercase transition"
-                  >
-                    LOCK
+                  </div>                    {/* Revert Nuke Button */}
+                    {breachStatus === 'nuked' && (
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.96 }}
+                        onClick={handleRevertNuke}
+                        className="ml-4 px-3 py-1 text-xs bg-fuchsia-900/30 text-fuchsia-300 border border-fuchsia-500 rounded hover:bg-fuchsia-800 transition-colors"
+                      >
+                        Revert Last Nuke
+                      </motion.button>
+                    )}
+                    K
                   </button>
                 </div>
               </div>
