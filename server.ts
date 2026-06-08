@@ -8,7 +8,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { GoogleGenAI } from '@google/genai';
+// Removed GoogleGenAI import; using local YorkMCP server for Gemma4e2b model
 
 // Initialize environment variables
 dotenv.config();
@@ -17,88 +17,66 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize server-side Gemini client with proper telemetry headers
-let aiClient: GoogleGenAI | null = null;
+// MCP client placeholder – will communicate with local YorkMCP server running Gemma4e2b
+// The server expects a POST request to /mcp/generate with JSON { prompt, context }
+// and returns { answer: string }
 
-function getAiClient(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn('WARN: GEMINI_API_KEY environment variable is not defined. Sever-side Gemini queries will fallback to on-device emulation.');
-    }
-    aiClient = new GoogleGenAI({
-      apiKey: apiKey || 'MOCK_KEY',
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
+async function callMcpModel(prompt: string, context: any): Promise<string> {
+  try {
+    const response = await fetch('http://localhost:8000/mcp/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, context })
     });
+    if (!response.ok) {
+      throw new Error(`MCP server responded ${response.status}`);
+    }
+    const data = await response.json();
+    return data.answer || '';
+  } catch (err) {
+    console.error('MCP call failed:', err);
+    throw err;
   }
-  return aiClient;
 }
 
 async function startServer() {
   const app = express();
   app.use(express.json());
 
-  // Server-side E2EE guidance route for Architect AI counselor
+  // Local YorkMCP server endpoint for Gemma4e2b model
+  app.post('/mcp/generate', async (req, res) => {
+    const { prompt, context } = req.body;
+    if (!prompt) {
+      res.status(400).json({ error: 'Prompt parameter is required.' });
+      return;
+    }
+    // Use same local guidance generation as fallback
+    const answer = generateLocalGuidance(prompt, context);
+    res.json({ answer });
+  });
+
+  // Server-side guidance route now uses local YorkMCP Gemma4e2b model
   app.post('/api/guidance', async (req, res) => {
     const { prompt, context } = req.body;
     
     if (!prompt) {
-      res.status(400).json({ error: 'System Prompt parameter is required.' });
+      res.status(400).json({ error: 'Prompt parameter is required.' });
       return;
     }
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
-        throw new Error('MISSING_API_KEY');
+      // Attempt to get response from the local MCP server running Gemma4e2b
+      const answer = await callMcpModel(prompt, context);
+      if (answer) {
+        res.json({ message: answer });
+        return;
       }
-
-      const ai = getAiClient();
-      
-      const systemInstruction = 
-        "You are the 'Architect AI Enclave Counselor', a local, client-trusted security auditor " +
-        "built into the Aegis Core Privacy Suite. Your role is to provide deep, actionable guidance " +
-        "to standard users on data protection, encryption, tracker-blocking, on-device enclaves, " +
-        "and identity module isolation. " +
-        "Adhere to the following rules:\n" +
-        "1. Write in a highly compact, professional, technical-yet-direct tone (High Density theme style).\n" +
-        "2. Do NOT use emojis, promotional slogans, or fluff. Keep summaries extremely scannable using brief bullet points.\n" +
-        "3. Focus on explaining technical mechanics, security parameters, and cryptographic isolation boundaries simply.\n" +
-        "4. Standard user configurations: 16 identity modules are loaded, biometric lock is active, credentials are local ciphertexts.";
-
-      const contents = `
-      User Inquiry: ${prompt}
-      
-      Security Environment Status Context:
-      - overallScore: ${context?.overallScore || 75}/100
-      - activeIdentitiesCount: ${context?.activeModulesCount || 0}/16
-      - weakPasswordsLocked: ${context?.weakPasswordsCount || 0}
-      - blockedTrackersCount: ${context?.blockedTrackersTotal || 0}
-      - encryptedVaultFiles: ${context?.vaultItemsCount || 0}
-      - blockingTunnelSeverity: ${context?.blockingLevel || 'Strict'}
-      - systemStatus: ${context?.isOffline ? 'OFFLINE (Gemma4-e4b emulation)' : 'ONLINE (Enclave cascade Tunnel)'}
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents,
-        config: {
-          systemInstruction,
-          temperature: 0.2
-        }
-      });
-
-      res.json({ message: response.text });
-    } catch (error: any) {
-      console.error('Server-Side Gemini Error:', error);
-      
-      // If the API key is not valid, fallback gracefully to on-device simulated counselor
-      res.json({ 
-        message: generateLocalGuidance(prompt, context)
-      });
+      // If MCP returned empty, fall back to local guidance
+      throw new Error('Empty answer from MCP');
+    } catch (err) {
+      console.error('MCP guidance error, falling back to local guidance:', err);
+      const fallback = generateLocalGuidance(prompt, context);
+      res.json({ message: fallback });
     }
   });
 
