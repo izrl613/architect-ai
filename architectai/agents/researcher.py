@@ -1,12 +1,10 @@
-from google.adk.agents import LlmAgent
+from google.antigravity import LocalAgentConfig
 
-researcher_agent = LlmAgent(
-    name='researcher',
-    model='gemini-2.0-flash-lite',
-    description='Researches the topic and stores findings in session state.',
-    instruction=(
+researcher_config = LocalAgentConfig(
+    model='gemma-4-e4b',
+    system_instructions=(
+        'Researches the topic and stores findings in session state.\n'
         'Analyze the user request thoroughly. '
         'Store key findings in state["research_results"] for the next agent to use.'
-    ),
-    output_key='research_results',
+    )
 )

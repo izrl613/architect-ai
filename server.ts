@@ -8,7 +8,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-// Removed GoogleGenAI import; using local YorkMCP server for Gemma4e2b model
+// Removed GoogleGenAI import; using local YorkMCP server for gemma-4-e4b model
 
 // Initialize environment variables
 dotenv.config();
@@ -16,8 +16,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize server-side Gemini client with proper telemetry headers
-// MCP client placeholder – will communicate with local YorkMCP server running Gemma4e2b
+// MCP client placeholder – will communicate with local YorkMCP server running gemma-4-e4b
 // The server expects a POST request to /mcp/generate with JSON { prompt, context }
 // and returns { answer: string }
 
@@ -43,7 +42,7 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
-  // Local YorkMCP server endpoint for Gemma4e2b model
+  // Local YorkMCP server endpoint for gemma-4-e4b model
   app.post('/mcp/generate', async (req, res) => {
     const { prompt, context } = req.body;
     if (!prompt) {
@@ -55,7 +54,7 @@ async function startServer() {
     res.json({ answer });
   });
 
-  // Server-side guidance route now uses local YorkMCP Gemma4e2b model
+  // Server-side guidance route now uses local YorkMCP gemma-4-e4b model
   app.post('/api/guidance', async (req, res) => {
     const { prompt, context } = req.body;
     
@@ -65,7 +64,7 @@ async function startServer() {
     }
 
     try {
-      // Attempt to get response from the local MCP server running Gemma4e2b
+      // Attempt to get response from the local MCP server running gemma-4-e4b
       const answer = await callMcpModel(prompt, context);
       if (answer) {
         res.json({ message: answer });
@@ -101,41 +100,41 @@ async function startServer() {
   });
 }
 
-// Deterministic on-device fallback counselor using local context (simulating gemma4-e4b)
+// Deterministic on-device fallback counselor using local context (simulating gemma-4-e4b)
 function generateLocalGuidance(prompt: string, context: any): string {
   const q = prompt.toLowerCase();
   
   if (q.includes('password') || q.includes('passphrase') || q.includes('strength')) {
-    return `### [Local Gemma4-e4b Advice] Credential Architecture Recommendations
+    return `### [Local gemma-4-e4b Advice] Credential Architecture Recommendations
 - **Avoid Key Repetition**: Ensure you do not use identical master passwords across corporate sandboxes (ID-04) and public burners (ID-07).
 - **Evaluate Strength Scores**: Our localized on-device metrics require high entropy levels. Passwords with fewer than 10 bytes or lacking numbers are flagged.
 - **Audit Findings**: You currently have **${context?.weakPasswordsCount || 0} weak passwords** in storage. Purge or cycle keys.`;
   }
   
   if (q.includes('module') || q.includes('identity') || q.includes('custom')) {
-    return `### [Local Gemma4-e4b Advice] Virtual Identity Sandbox Isolation
+    return `### [Local gemma-4-e4b Advice] Virtual Identity Sandbox Isolation
 - **16 Isolated Sectors Active**: Currently, **${context?.activeModulesCount || 0} of 16 modules** are running. Turning on unused profiles expands memory allocation footprints.
 - **MFA Enforcement**: Enforce multi-factor tokens (TOTP/Biometric) on all modules of elevated or paranoid clearance to protect sandbox registers.
 - **Sandbox Whitelist Bounds**: Ensure only verified software (such as Tor, Brave, Signal, QuickBooks) is registered in sandbox whitelists.`;
   }
 
   if (q.includes('tracker') || q.includes('block') || q.includes('blocker') || q.includes('analytics')) {
-    return `### [Local Gemma4-e4b Advice] Real-time Network Sanitization
+    return `### [Local gemma-4-e4b Advice] Real-time Network Sanitization
 - **Severity Level Selection**: You are currently operating at **${context?.blockingLevel || 'Strict'}** parameter filtering.
 - **Isolation Boundaries**: Switching to 'Isolation' intercepts all tracking pixels. Standard mode blocks analytical trackers only.
 - **Scrubbing Results**: **${context?.blockedTrackersTotal || 0} requests** have been blocked. All socket handshakes are verified client-side.`;
   }
 
   if (q.includes('vault') || q.includes('storage') || q.includes('file') || q.includes('photo')) {
-    return `### [Local Gemma4-e4b Advice] Symmetric Device Airgap Vault
+    return `### [Local gemma-4-e4b Advice] Symmetric Device Airgap Vault
 - **Encrypted Local Enclave**: Stored files are symmetrically locked on local storage using Base64 indexing.
 - **Zero-Knowledge**: Aegis does not store original decryption matrices. Lost vault passphrases cannot be recovered.
 - **Vault Status**: Your vault contains **${context?.vaultItemsCount || 0} encrypted elements**. All backups are synchronized with on-device sandbox clusters.`;
   }
 
-  return `### [Local Gemma4-e4b Advice] Aegis Core Status Analysis
+  return `### [Local gemma-4-e4b Advice] Aegis Core Status Analysis
 - **On-Device Status**: Currently active in **${context?.isOffline ? 'AIRGAP OFFLINE' : 'STANDARD SECURE TUNNEL'}** configuration.
-- **Local Enclave Heuristics**: Our local on-device neural parser (Gemma4-e4b) is active, keeping communication trace-free.
+- **Local Enclave Heuristics**: Our local on-device neural parser (gemma-4-e4b) is active, keeping communication trace-free.
 - **Dynamic Scoring**: Your core suite privacy score is evaluated as **${context?.overallScore || 75}%**. We recommend enforcing MFA on active identities to elevate this ranking.`;
 }
 

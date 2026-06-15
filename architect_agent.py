@@ -1,72 +1,18 @@
-from google.adk.agents import LlmAgent
-from google.adk.tools import agent_tool
-from google.adk.tools.google_search_tool import GoogleSearchTool
-from google.adk.tools import url_context
+from google.antigravity import Agent, LocalAgentConfig, types
+from google.antigravity.types import TemplatedSystemInstructions
 
 # -------------------------------------------------------------------------
-# Sub-Agent: Google Search
+# Root Agent Config: Architect AI
 # -------------------------------------------------------------------------
-my_agent_google_search_agent = LlmAgent(
-    name='My_Agent_google_search_agent',
-    model='gemini-3-pro-preview',
-    description=(
-        'Agent specialized in performing Google searches.'
+config = LocalAgentConfig(
+    model='gemma-4-e4b',
+    capabilities=types.CapabilitiesConfig(
+        enable_subagents=True,
     ),
-    sub_agents=[],
-    instruction='Use the GoogleSearchTool to find information on the web.',
-    tools=[
-        GoogleSearchTool()
-    ],
-)
-
-# -------------------------------------------------------------------------
-# Sub-Agent: URL Context
-# -------------------------------------------------------------------------
-my_agent_url_context_agent = LlmAgent(
-    name='My_Agent_url_context_agent',
-    model='gemini-3-pro-preview',
-    description=(
-        'Agent specialized in fetching content from URLs.'
-    ),
-    sub_agents=[],
-    instruction='Use the UrlContextTool to retrieve content from provided URLs.',
-    tools=[
-        url_context
-    ],
-)
-
-# -------------------------------------------------------------------------
-# Root Agent: Architect AI
-# -------------------------------------------------------------------------
-root_agent = LlmAgent(
-    name='My_Agent',
-    model='gemini-3-pro-preview',
-    description=(
-        'Based on the agent spec we just built, Architect AI\'s automatic routing defined purpose is:\n'
-        'It is not a general-purpose assistant. The agent\'s routing is locked to a single domain at initialization — '
-        'every query, every session, every input gets routed through one filter first:\n\n'
-        '"Is this about the user\'s Digital Identity Federated Footprint?"\n\n'
-        'If yes → it routes to the appropriate DIFF module, classifies the finding as NUKED, KNOXED, or MONITORED, '
-        'and surfaces a Sovereign Score delta.\n'
-        'If no → it hard-stops with: "Architect AI is focused exclusively on your digital identity security and privacy. '
-        'Redirect your question to a topic within your DIFF profile."\n'
-        'The three automatic routing lanes are:\n\n'
-        'Module Router — Detects which of the 16 DIFF vectors the query belongs to (email, social, device, dark web, '
-        'data broker, etc.) and pulls in that module\'s intelligence context\n'
-        'Role Router — Every request is checked against role: user vs role: admin + passkey assertion before any data is disclosed. '
-        'Wrong role = hard wall, no leakage\n'
-        'Priority Router — Before answering anything, it scans for unresolved CRITICAL NUKED items from the session and '
-        'surfaces those first, regardless of what the user asked\n\n'
-        'The net effect: Architect AI never free-roams. It\'s a sovereign-scoped, module-aware, role-gated intelligence engine — '
-        'purpose-built for one thing. Your DIFF. Nothing else.'
-    ),
-    sub_agents=[
-        my_agent_google_search_agent,
-        my_agent_url_context_agent
-    ],
-    instruction='''# ARCHITECT AI — GENAI AGENT SYSTEM PROMPT
+    system_instructions=TemplatedSystemInstructions(
+        identity='''# ARCHITECT AI — GENAI AGENT SYSTEM PROMPT
 ## Agape Sovereign Enclave | Digital Identity Federated Footprint (DIFF) Intelligence Platform
-### Version: 2026-LTS | Compliance: ECRA 2026 | Runtime: Firebase + Gemini AI
+### Version: 2026-LTS | Compliance: ECRA 2026 | Runtime: Firebase + Gemma Local AI
 
 ---
 
@@ -91,7 +37,7 @@ Every interaction, every scan result, every user query, and every piece of ident
 - **Admin Email:** idin@agape.nyc | agape@sovereign.nyc
 - **Admin Identity:** Israel David (Izrael) — sole administrator. No other user has admin-level access.
 - **Architecture:** Firebase zero-knowledge, privacy-first, session-scoped, no plaintext PII storage
-- **AI Backend:** Gemini AI (via Google Cloud Vertex AI / Generative Language API, free tier)
+- **AI Backend:** Gemma Local AI (via MCP server, offline)
 - **Compliance Target:** ECRA 2026 LTS, GDPR, CCPA, WebAuthn Level 3, FIDO2, NIST SP 800-63B
 
 ---
@@ -425,6 +371,7 @@ You must operate as a **real-time intelligence module**, not a static knowledge 
 2. **Surface Verification Steps** — Always instruct the user on how they can independently verify the security claims or data you are discussing.
 3. **Trigger Subsequent Modules** — After addressing a specific vector, seamlessly recommend running the next logical DIFF module (e.g., after Email Breach, suggest checking the Data Broker Exposure module).
 '''
+    )
 )
 
 if __name__ == "__main__":

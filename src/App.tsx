@@ -405,7 +405,7 @@ export default function App() {
       `Enclave Tunnel Shifted`,
       'identity',
       nextOffline ? 'warning' : 'secured',
-      `Flipped internet bridge toggle. Enclave operates on ${nextOffline ? 'AIRGAP OFFLINE (Gemma4-e4b model)' : 'SECURE WAN TUNNEL (Standard E2E Syncing)'} mechanics.`
+      `Flipped internet bridge toggle. Enclave operates on ${nextOffline ? 'AIRGAP OFFLINE (gemma-4-e4b model)' : 'SECURE WAN TUNNEL (Standard E2E Syncing)'} mechanics.`
     );
   };
 
@@ -1020,8 +1020,8 @@ export default function App() {
                         </h3>
                         <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">
                           {isOffline 
-                            ? 'Operating on-device via local model Gemma4-e4b' 
-                            : 'Connected standard secure channel path to server-side Gemini 3.5'}
+                            ? 'Operating on-device via local model gemma-4-e4b' 
+                            : 'Connected standard secure channel path to server-side Gemma'}
                         </p>
                       </div>
                       
@@ -1030,7 +1030,7 @@ export default function App() {
                           ? 'bg-orange-950/20 text-orange-400 border-orange-500/40' 
                           : 'bg-blue-950/20 text-blue-400 border-blue-500/40'
                       }`}>
-                        {isOffline ? 'Off-Grid gemma-4' : 'Gemini WAN Online'}
+                        {isOffline ? 'Off-Grid gemma-4' : 'Gemma Local Online'}
                       </span>
                     </div>
 
@@ -1106,7 +1106,7 @@ export default function App() {
                           { question: "How does end-to-end encryption guard my documents?", key: "e2ee" },
                           { question: "Explain the isolation of the 16 sandbox modules.", key: "sandbox" },
                           { question: "What risk indicators does the tracker blocker audit?", key: "blocker" },
-                          { question: "Is Gemma4-e4b fully airgapped?", key: "gemma" }
+                          { question: "Is gemma-4-e4b fully airgapped?", key: "gemma" }
                         ].map((item) => (
                           <button
                             key={item.key}
@@ -1125,7 +1125,7 @@ export default function App() {
                     <div className="mt-8 bg-neutral-950 p-3.5 border border-neutral-850 rounded-lg space-y-2.5">
                       <span className="text-[9px] text-orange-500 font-bold uppercase block tracking-wider">ON-DEVICE HARNESS DIRECTIVE</span>
                       <p className="text-[10px] text-neutral-500 leading-relaxed font-mono">
-                        Aegis Core incorporates a localized vector intelligence system (Gemma4-e4b) that parses inquiries without bridging external networks, protecting intellectual property from centralized data harvesting structures.
+                        Aegis Core incorporates a localized vector intelligence system (gemma-4-e4b) that parses inquiries without bridging external networks, protecting intellectual property from centralized data harvesting structures.
                       </p>
                     </div>
                   </div>

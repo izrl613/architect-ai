@@ -16,6 +16,5 @@ View your app in AI Studio: https://ai.studio/apps/54f1b46e-aa7f-45c0-ad82-73ea3
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+2. Ensure the local Gemma MCP server is running on port 8000
+3. Start the enclave server: `npm run server`
