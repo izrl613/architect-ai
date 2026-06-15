@@ -402,6 +402,13 @@ export default function BiometricLock({ onUnlock, isInitiallyLocked }: Biometric
                         <p className="text-xs font-semibold text-neutral-400 font-sans">Use another account</p>
                       </div>
                     </button>
+                    
+                    <button
+                      onClick={() => setShowGoogleModal(false)}
+                      className="w-full mt-3 text-center py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 font-sans text-xs font-bold rounded-lg transition-colors cursor-pointer border-none"
+                    >
+                      Cancel / Change Mind
+                    </button>
                   </div>
                 </div>
               )}

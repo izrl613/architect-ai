@@ -9,6 +9,9 @@ import {
   IdentityModule, PasswordEntry, EncryptedMessage, VaultItem, TrackerLog, AuditLog 
 } from './types';
 import { INITIAL_IDENTITY_MODULES } from './data/modules';
+import { useModuleTelemetry } from './hooks/useModuleTelemetry';
+import { generateSovereignReport } from './utils/pdfGenerator';
+import { useUIDesign } from './UIDesignContext';
 
 // Import components
 import BiometricLock from './components/BiometricLock';
@@ -26,6 +29,17 @@ import {
 } from 'lucide-react';
 
 export default function App() {
+  const { currentDesign, toggleDesign } = useUIDesign();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const currentTimeUTC = time.toISOString().substring(11, 19);
+
   // Authentication / Lock State
   const [isLocked, setIsLocked] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: string; method: string; score: number } | null>(null);
@@ -69,6 +83,9 @@ export default function App() {
   const [cloudSync, setCloudSync] = useState<{status:'success'|'warning'|'error', timestamp:string}>({status:'success', timestamp:new Date().toISOString()});
   // Backup toast state
   const [showBackupToast, setShowBackupToast] = useState(false);
+
+  // Module Telemetry Tracking
+  useModuleTelemetry(activeTab);
 
   // Check backup age on mount / status change
   useEffect(() => {
@@ -152,47 +169,34 @@ export default function App() {
     localStorage.setItem('aegis_cloud_sync', JSON.stringify({status:'success', timestamp:new Date().toISOString()}));
   };
 
-  // Generate downloadable security report (TXT)
-  const downloadJsonReport = () => {
-    const reportData = {
-      currentUser: currentUser,
-      breachStatus: breachStatus,
-      cloudSync: cloudSync,
-      auditLogs: auditLogs,
-      systemSuggestions: systemSuggestions,
-      modules: modules,
-      passwords: passwords,
-      vaultItems: vaultItems,
-      blockedTrackers: blockedTrackers,
-      stats: stats,
-      generatedAt: new Date().toISOString()
-    };
-    const jsonStr = JSON.stringify(reportData, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'threat_report.json';
-    a.click();
-    URL.revokeObjectURL(url);
+  // Generate downloadable security report
+  const handleDownloadReport = async () => {
+    try {
+      await generateSovereignReport(
+        currentUser?.name || 'Israel David',
+        displayScore,
+        activeModulesCount,
+        blockedTrackers.length
+      );
+      triggerAuditLog(
+        'Sovereign Report Generated',
+        'identity',
+        'secured',
+        'Sovereign Identity Trust Report exported successfully.'
+      );
+    } catch (err) {
+      console.error('Failed to generate report:', err);
+    }
   };
-    const reportLines = [];
-    reportLines.push('Sovereign Encryption & Exposure Report');
-    reportLines.push('Generated: ' + new Date().toISOString());
-    reportLines.push('---');
-    reportLines.push(`Current User: ${currentUser?.email || 'N/A'}`);
-    reportLines.push(`Breach Status: ${breachStatus}`);
-    reportLines.push(`Cloud Sync: ${cloudSync.status} (last updated ${cloudSync.timestamp})`);
-    // Add more details as needed, e.g., audit logs count
-    reportLines.push(`Audit Log Entries: ${auditLogs.length}`);
-    const content = reportLines.join('\n');
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'security_report.txt';
-    a.click();
-    URL.revokeObjectURL(url);
+
+  const handleKnoxAllSovereign = () => {
+    setStats(prev => ({ ...prev, knoxed: prev.knoxed + 16 }));
+    triggerAuditLog(
+      'Knox All Triggered',
+      'identity',
+      'secured',
+      'All security matrices locked down to Knox level 100.'
+    );
   };
 
   const [nukeProgress, setNukeProgress] = useState(0);
@@ -627,6 +631,536 @@ export default function App() {
     localStorage.removeItem('aegis_pre_nuke_snapshot');
     triggerAuditLog('Nuke Reverted', 'identity', 'secured', 'Restored security state from pre-nuke snapshot.');
   };
+
+  const renderAgapeLayout = () => {
+    return (
+      <div style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column", background: "#060D1F", overflow: "hidden" }}>
+        {/* Top border gradient */}
+        <div style={{ height: 2, background: "linear-gradient(135deg, #FF2E9F 0%, #00D4FF 50%, #FF7A18 100%)", backgroundSize: "200% 100%", animation: "rotate-gradient 3s linear infinite", flexShrink: 0 }} />
+
+        {/* Top Header */}
+        <header style={{ height: 56, background: "rgba(6,13,31,0.98)", borderBottom: "1px solid rgba(0,212,255,0.1)", display: "flex", alignItems: "center", padding: "0 20px", gap: 16, position: "relative", zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <svg viewBox="0 0 32 32" width="28" style={{ flexShrink: 0, filter: "drop-shadow(0 0 6px #00D4FF)" }}>
+              <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" fill="none" stroke="#00D4FF" strokeWidth="1.5" />
+              <polygon points="16,8 24,12 24,20 16,24 8,20 8,12" fill="none" stroke="#FF2E9F" strokeWidth="0.8" opacity="0.7" />
+              <text x="16" y="20" textAnchor="middle" fill="#00D4FF" fontFamily="Orbitron" fontSize="8" fontWeight="900">AI</text>
+            </svg>
+            <div>
+              <div style={{ fontFamily: "'Orbitron', monospace", fontSize: "0.7rem", fontWeight: 700, color: "#00D4FF", letterSpacing: "0.1em" }}>AGAPE SOVEREIGN</div>
+              <div style={{ fontFamily: "'Share Tech Mono'", fontSize: "0.55rem", color: "#7F9BB3", letterSpacing: "0.1em" }}>ARCHITECT AI 2026</div>
+            </div>
+          </div>
+
+          <div style={{ height: 20, width: 1, background: "rgba(0,212,255,0.2)" }} />
+
+          {/* Live indicator */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#0f0", boxShadow: "0 0 8px #0f0", animation: "pulse-border 1.5s infinite" }} />
+            <span style={{ fontFamily: "'Share Tech Mono'", fontSize: "0.65rem", color: "#0f0", letterSpacing: "0.1em" }}>LIVE</span>
+          </div>
+
+          <div style={{ height: 20, width: 1, background: "rgba(0,212,255,0.2)" }} />
+
+          {/* Time */}
+          <span style={{ fontFamily: "'Share Tech Mono'", fontSize: "0.7rem", color: "#00D4FF" }}>
+            {currentTimeUTC} UTC
+          </span>
+
+          <div style={{ flex: 1 }} />
+
+          {/* Right side controls */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontFamily: "'Share Tech Mono'", fontSize: "0.75rem", fontWeight: "bold", color: "#10b981", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", padding: "2px 8px", borderRadius: 4 }}>
+              {displayScore} SCORE
+            </span>
+
+            <button
+              onClick={toggleDesign}
+              style={{ fontFamily: "'Share Tech Mono'", fontSize: "0.7rem", padding: "4px 10px", background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.3)", borderRadius: 4, color: "#00D4FF", cursor: "pointer", transition: "all 0.2s" }}
+              className="hover:bg-[#00D4FF]/20"
+            >
+              ⟲ ARCHITECT UI
+            </button>
+
+            {/* Profile trigger */}
+            <div style={{ position: "relative" }}>
+              <button 
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(0,212,255,0.05)", border: "1px solid rgba(0,212,255,0.2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#00D4FF", fontSize: "0.8rem", fontFamily: "'Orbitron'" }}
+              >
+                ID
+              </button>
+              
+              {isProfileOpen && (
+                <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 8, width: 200, background: "#060D1F", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, overflow: "hidden", zIndex: 100, boxShadow: "0 10px 25px rgba(0,0,0,0.5)" }}>
+                  <div style={{ padding: "12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <div style={{ fontSize: 9, fontFamily: "'Share Tech Mono'", color: "#00D4FF" }}>SOVEREIGN IDENTITY</div>
+                    <div style={{ fontSize: 11, color: "white", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{currentUser?.email || "idin@agape.nyc"}</div>
+                  </div>
+                  <div style={{ padding: "6px" }}>
+                    <button 
+                      onClick={() => { toggleDesign(); setIsProfileOpen(false); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px", fontSize: 11, color: "#7F9BB3", background: "transparent", border: "none", borderRadius: 4, cursor: "pointer", textAlign: "left" }}
+                      className="hover:bg-white/5 hover:text-white"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Switch to Architect UI
+                    </button>
+                    <button 
+                      onClick={() => { setIsLocked(true); setIsProfileOpen(false); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px", fontSize: 11, color: "#FF2E9F", background: "transparent", border: "none", borderRadius: 4, cursor: "pointer", textAlign: "left" }}
+                      className="hover:bg-[#FF2E9F]/10"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      Lock Enclave
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Content body */}
+        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+          {/* Sidebar */}
+          <aside style={{ width: 260, height: "100%", background: "rgba(6,13,31,0.97)", borderRight: "1px solid rgba(0,212,255,0.12)", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0 }}>
+            {/* Header / Logo */}
+            <div style={{ padding: "16px", borderBottom: "1px solid rgba(0,212,255,0.08)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#00D4FF" }} />
+                <span style={{ fontFamily: "'Share Tech Mono'", fontSize: "0.65rem", color: "#FF7A18", letterSpacing: "0.15em" }}>DIFF HUB</span>
+              </div>
+              {/* Stats Row */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ flex: 1, background: "rgba(255,46,159,0.1)", borderRadius: 6, padding: "6px", textAlign: "center", border: "1px solid rgba(255,46,159,0.2)" }}>
+                  <div style={{ color: "#FF2E9F", fontFamily: "'Orbitron'", fontSize: "0.85rem", fontWeight: 700 }}>{stats.nuked}</div>
+                  <div style={{ color: "#7F9BB3", fontSize: "0.58rem", letterSpacing: "0.1em" }}>NUKED</div>
+                </div>
+                <div style={{ flex: 1, background: "rgba(0,212,255,0.08)", borderRadius: 6, padding: "6px", textAlign: "center", border: "1px solid rgba(0,212,255,0.2)" }}>
+                  <div style={{ color: "#00D4FF", fontFamily: "'Orbitron'", fontSize: "0.85rem", fontWeight: 700 }}>{stats.knoxed}</div>
+                  <div style={{ color: "#7F9BB3", fontSize: "0.58rem", letterSpacing: "0.1em" }}>KNOXED</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Menu */}
+            <nav style={{ padding: "12px 8px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto", flex: 1 }} className="scroll-area">
+              {[
+                { id: 'dashboard', label: 'DASHBOARD', icon: LayoutGridIcon },
+                { id: 'identities', label: 'DIFF MODULES (16)', icon: Cpu },
+                { id: 'passwords', label: 'SECURE KEYCHAIN', icon: KeyRound },
+                { id: 'vault', label: 'ENC VAULT', icon: HardDrive },
+                { id: 'messenger', label: 'COMMS ENCLAVE', icon: MessageSquare },
+                { id: 'trackers', label: 'TRACKER SHIELD', icon: Activity },
+                { id: 'ai', label: 'ARCHITECT COUNSELOR', icon: HelpCircle }
+              ].map((s) => {
+                const isActive = activeTab === s.id;
+                const Icon = s.icon;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveTab(s.id as any)}
+                    style={{ 
+                      width: "100%", 
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: 10, 
+                      padding: "10px 12px", 
+                      borderRadius: 8, 
+                      background: isActive ? "rgba(0, 212, 255, 0.08)" : "transparent", 
+                      border: isActive ? "1px solid rgba(0, 212, 255, 0.2)" : "1px solid transparent", 
+                      color: isActive ? "#00D4FF" : "#E8F4FF", 
+                      cursor: "pointer", 
+                      textAlign: "left", 
+                      fontFamily: "'Orbitron', monospace", 
+                      fontSize: "0.68rem", 
+                      fontWeight: isActive ? 700 : 500, 
+                      letterSpacing: "0.08em" 
+                    }}
+                    className="hover:bg-white/5 transition-all"
+                  >
+                    <Icon className="w-4 h-4" style={{ color: isActive ? "#00D4FF" : "rgba(0, 212, 255, 0.6)" }} />
+                    {s.label}
+                  </button>
+                );
+              })}
+
+              <div style={{ margin: "8px 16px", height: 1, background: "linear-gradient(135deg, #FF2E9F 0%, #00D4FF 50%, #FF7A18 100%)", opacity: 0.3 }} />
+
+              <button
+                onClick={handleDownloadReport}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, background: "transparent", border: "none", color: "#FF7A18", cursor: "pointer", textAlign: "left", fontFamily: "'Orbitron', monospace", fontSize: "0.68rem", fontWeight: 500, letterSpacing: "0.08em" }}
+                className="hover:bg-white/5 transition-all"
+              >
+                <FileText className="w-4 h-4 text-[#FF7A18]" />
+                IDENTITY AUDIT REPORT
+              </button>
+            </nav>
+
+            {/* Bottom status block */}
+            <div style={{ padding: "12px 16px", borderTop: "1px solid rgba(0,212,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 9, fontFamily: "'Share Tech Mono'", color: "#7F9BB3" }}>
+              <span>AGAPE CORP v4.18</span>
+              <span style={{ color: "#00FF00" }}>● SECURE</span>
+            </div>
+          </aside>
+
+          {/* Main workspace */}
+          <main style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+            
+            {/* Background grid */}
+            <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px)", backgroundSize: "32px 32px", pointerEvents: "none" }} />
+            <div style={{ position: "absolute", top: "20%", right: "15%", width: 300, height: 300, background: "radial-gradient(circle, rgba(0,212,255,0.04) 0%, transparent 70%)", pointerEvents: "none" }} />
+            <div style={{ position: "absolute", bottom: "20%", left: "20%", width: 200, height: 200, background: "radial-gradient(circle, rgba(255,46,159,0.04) 0%, transparent 70%)", pointerEvents: "none" }} />
+
+            {/* Content container */}
+            <div style={{ position: "relative", zIndex: 1, height: "100%", overflowY: "auto", padding: 24 }} className="scroll-area flex-1">
+              <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+                
+                {/* Active Tab rendering */}
+                {activeTab === 'dashboard' && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 24, animation: "fade-in 0.4s ease" }}>
+                    
+                    {/* Bento stats row */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+                      <div className="glass-panel" style={{ padding: 16, position: "relative", overflow: "hidden" }}>
+                        <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono'", color: "#7F9BB3" }}>NUKED BREACHES</span>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8 }}>
+                          <span style={{ fontSize: "1.8rem", fontWeight: 900, color: "#FF2E9F", fontFamily: "'Orbitron'" }}>{stats.nuked}</span>
+                          <span style={{ fontSize: 10, color: "#7F9BB3" }}>EXPOSED SECTORS PURGED</span>
+                        </div>
+                      </div>
+                      <div className="glass-panel" style={{ padding: 16, position: "relative", overflow: "hidden" }}>
+                        <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono'", color: "#7F9BB3" }}>KNOX SECURED</span>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8 }}>
+                          <span style={{ fontSize: "1.8rem", fontWeight: 900, color: "#00D4FF", fontFamily: "'Orbitron'" }}>{stats.knoxed}</span>
+                          <span style={{ fontSize: 10, color: "#7F9BB3" }}>MFA HANDSHAKES VERIFIED</span>
+                        </div>
+                      </div>
+                      <div className="glass-panel" style={{ padding: 16, position: "relative", overflow: "hidden" }}>
+                        <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono'", color: "#7F9BB3" }}>MONITORED HOOKS</span>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8 }}>
+                          <span style={{ fontSize: "1.8rem", fontWeight: 900, color: "#FF7A18", fontFamily: "'Orbitron'" }}>{stats.monitored}</span>
+                          <span style={{ fontSize: 10, color: "#7F9BB3" }}>REAL-TIME SOCKET TAPS</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Threat card */}
+                    <div className="glass-panel shadow-2xl" style={{ position: "relative", overflow: "hidden" }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, width: 6, height: "100%", background: "linear-gradient(to bottom, #FF2E9F, #00D4FF, #FF7A18)" }} />
+                      <div style={{ padding: 20 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 16, flexWrap: "wrap" }}>
+                          <div>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 9, fontWeight: "bold", border: "1px solid rgba(255,46,159,0.3)", backgroundColor: "rgba(255,46,159,0.1)", color: "#FF2E9F", padding: "2px 8px", borderRadius: 4, marginBottom: 10 }}>
+                              <ShieldAlert className="h-3 w-3 animate-pulse" /> Critical Threat Alert
+                            </span>
+                            <h2 style={{ fontSize: "0.85rem", fontWeight: 900, color: "white", letterSpacing: "0.05em", fontFamily: "'Orbitron'" }}>
+                              Critical Historical Breach Exposure and Domain Spoofing Vulnerability Detected
+                            </h2>
+                          </div>
+                          <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono'", color: "#7F9BB3", padding: "4px 8px", background: "rgba(0,0,0,0.3)", borderRadius: 4, border: "1px solid rgba(0,212,255,0.1)" }}>
+                            ID: AEGIS-789-VULN
+                          </span>
+                        </div>
+
+                        {breachStatus === 'exposed' ? (
+                          <div style={{ marginTop: 14 }}>
+                            <p style={{ fontSize: "0.75rem", color: "#7F9BB3", lineHeight: 1.6, fontFamily: "sans-serif" }}>
+                              Architect AI scan for <strong style={{ color: "white" }}>idin@agape.nyc</strong> indicates severe identity degradation. The account was identified in the <strong style={{ color: "#FF2E9F" }}>2019 Canva breach data</strong> and a recent <strong style={{ color: "#FF2E9F" }}>Pastebin dump</strong> containing plaintext password exposures. Security posture analysis reveals missing MFA on the primary recovery account and active suspicious SMTP forwarding rules mapping from agape.nyc DNS MX registers.
+                            </p>
+
+                            {isNuking && (
+                              <div style={{ margin: "16px 0", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(0,212,255,0.1)", padding: 12, borderRadius: 8 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#7F9BB3", marginBottom: 6, fontFamily: "'Share Tech Mono'" }}>
+                                  <span>Purging leak repositories...</span>
+                                  <span>{nukeProgress}%</span>
+                                </div>
+                                <div style={{ width: "100%", background: "rgba(255,255,255,0.05)", height: 8, borderRadius: 4, overflow: "hidden" }}>
+                                  <div style={{ height: "100%", background: "linear-gradient(to right, #FF2E9F, #00D4FF, #FF7A18)", width: `${nukeProgress}%`, transition: "all 0.1s" }} />
+                                </div>
+                              </div>
+                            )}
+
+                            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
+                              <button
+                                onClick={handleDownloadReport}
+                                style={{ padding: "8px 16px", fontSize: 10, fontWeight: "bold", fontFamily: "'Share Tech Mono'", border: "1px solid rgba(0,212,255,0.4)", background: "rgba(0,212,255,0.1)", color: "#00D4FF", borderRadius: 6, cursor: "pointer", transition: "all 0.2s" }}
+                                className="hover:bg-[#00D4FF]/25"
+                              >
+                                GENERATE SOVEREIGN IDENTITY TRUST REPORT
+                              </button>
+                              <button
+                                onClick={handleNukeExplosion}
+                                disabled={isNuking}
+                                style={{ padding: "8px 16px", fontSize: 10, fontWeight: "bold", fontFamily: "'Share Tech Mono'", border: "1px solid rgba(255,46,159,0.4)", background: "rgba(255,46,159,0.1)", color: "#FF2E9F", borderRadius: 6, cursor: "pointer", transition: "all 0.2s" }}
+                                className="hover:bg-[#FF2E9F]/25 disabled:opacity-40"
+                              >
+                                NUKE EXPOSURE
+                              </button>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(0,0,0,0.3)", border: "1px solid rgba(0,212,255,0.1)", borderRadius: 6, padding: "0 8px" }}>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  placeholder="Min"
+                                  value={scanInterval ?? ''}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val) && val > 0) setScanInterval(val);
+                                    else setScanInterval(null);
+                                  }}
+                                  style={{ width: 32, background: "transparent", border: "none", borderBottom: "1px solid rgba(0,212,255,0.3)", color: "white", outline: "none", textAlign: "center", fontSize: 11, fontFamily: "'Share Tech Mono'" }}
+                                />
+                                <span style={{ fontSize: 9, color: "#7F9BB3", fontFamily: "'Share Tech Mono'" }}>/ scan</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: 14 }}>
+                            <div style={{ padding: 12, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: 8, display: "flex", gap: 8, fontSize: "0.75rem", color: "#10b981" }}>
+                              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                              <div>
+                                <strong style={{ color: "white", display: "block", marginBottom: 2 }}>Sovereign Posture Secured & Cleansed</strong>
+                                The Canva breach records and paste occurrences associated with <strong>idin@agape.nyc</strong> have been successfully purged from indexed registries. High-entropy key rotation occurred, and security thresholds are at 100% Knox security boundaries.
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setBreachStatus('exposed')}
+                              style={{ border: "none", background: "transparent", textDecoration: "underline", color: "#7F9BB3", fontSize: 9, cursor: "pointer", marginTop: 8 }}
+                            >
+                              Reset simulation matrices
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Event Log inside card */}
+                      <div style={{ padding: "0 20px 20px 20px" }}>
+                        <h3 style={{ fontSize: "0.75rem", color: "white", marginBottom: 12, fontFamily: "'Orbitron'" }}>System Event Log</h3>
+                        <div style={{ borderLeft: "1px solid rgba(255,255,255,0.1)", paddingLeft: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                          {auditLogs.slice(0, 4).map((log) => (
+                            <div key={log.id} style={{ display: "flex", alignItems: "start", gap: 8, fontSize: 11 }}>
+                              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#00D4FF", marginTop: 4, shrink: 0 }} />
+                              <div>
+                                <span style={{ fontFamily: "'Share Tech Mono'", color: "#7F9BB3", marginRight: 8 }}>{log.timestamp}</span>
+                                <span style={{ fontFamily: "'Share Tech Mono'", color: "white", fontWeight: "bold" }}>{log.title}</span>
+                                {log.message && <span style={{ display: "block", fontSize: 10, color: "#7F9BB3", marginTop: 2 }}>{log.message}</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
+                      <div className="glass-panel" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                        <h3 style={{ fontSize: "0.75rem", color: "white", fontFamily: "'Orbitron'", display: "flex", alignItems: "center", gap: 6 }}>
+                          <User className="h-4 w-4 text-[#00D4FF]" /> REAL-WORLD SUITE STATUS
+                        </h3>
+                        <p style={{ fontSize: 11, color: "#7F9BB3", fontFamily: "'Share Tech Mono'" }}>
+                          These authentication markers correlate directly with Israel David's active security profiles.
+                        </p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(0,212,255,0.05)", borderRadius: 8, padding: 10 }}>
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: "bold", color: "white" }}>Google Account Sync</div>
+                              <div style={{ fontSize: 9, color: "#7F9BB3", fontFamily: "'Share Tech Mono'" }}>Linked and Verified: idin@agape.nyc</div>
+                            </div>
+                            <span style={{ fontSize: 9, color: "#10b981", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", padding: "2px 6px", borderRadius: 4, fontFamily: "'Share Tech Mono'" }}>ACTIVE</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(0,212,255,0.05)", borderRadius: 8, padding: 10 }}>
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: "bold", color: "white" }}>Biometric Passkey</div>
+                              <div style={{ fontSize: 9, color: "#7F9BB3", fontFamily: "'Share Tech Mono'" }}>FIDO2 SECURE ENCLAVE MODULE</div>
+                            </div>
+                            <span style={{ fontSize: 9, color: "#00D4FF", background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.2)", padding: "2px 6px", borderRadius: 4, fontFamily: "'Share Tech Mono'" }}>REGISTERED</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="glass-panel" style={{ padding: 20, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 12 }}>
+                        <div>
+                          <h3 style={{ fontSize: "0.75rem", color: "white", fontFamily: "'Orbitron'", display: "flex", alignItems: "center", gap: 6 }}>
+                            <Activity className="h-4 w-4 text-[#FF7A18]" /> SOVEREIGN ANALYTICS
+                          </h3>
+                          <p style={{ fontSize: 11, color: "#7F9BB3", fontFamily: "'Share Tech Mono'", marginTop: 6 }}>
+                            Core enclaves operating index is mapped client-side. Trackers caught inside local sandboxes are logged and destroyed instantly.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setActiveTab('identities')}
+                          style={{ padding: "8px", fontSize: 11, fontFamily: "'Share Tech Mono'", width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(0,212,255,0.1)", color: "white", borderRadius: 6, cursor: "pointer", transition: "all 0.2s" }}
+                          className="hover:border-[#00D4FF] hover:bg-black/50"
+                        >
+                          View 16 virtual identity heatmaps →
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+
+                {activeTab === 'identities' && (
+                  <IdentityModulesPanel 
+                    modules={modules}
+                    onUpdateModules={handleUpdateModules}
+                    triggerAuditLog={triggerAuditLog}
+                  />
+                )}
+
+                {activeTab === 'passwords' && (
+                  <PasswordManager 
+                    passwords={passwords}
+                    onUpdatePasswords={handleUpdatePasswords}
+                    triggerAuditLog={triggerAuditLog}
+                  />
+                )}
+
+                {activeTab === 'vault' && (
+                  <DocumentVault 
+                    items={vaultItems}
+                    onUpdateItems={handleUpdateVault}
+                    triggerAuditLog={triggerAuditLog}
+                    modules={modules}
+                    onUpdateModules={handleUpdateModules}
+                  />
+                )}
+
+                {activeTab === 'messenger' && (
+                  <EncryptedMessenger 
+                    messages={messages}
+                    onUpdateMessages={handleUpdateMessages}
+                    triggerAuditLog={triggerAuditLog}
+                  />
+                )}
+
+                {activeTab === 'trackers' && (
+                  <TrackerBlocker 
+                    blockedLogs={blockedTrackers}
+                    onAddLog={handleAddTrackerLog}
+                    onClearLogs={handleClearTrackerLogs}
+                    triggerAuditLog={triggerAuditLog}
+                  />
+                )}
+
+                {activeTab === 'ai' && (
+                  <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 16, animation: "fade-in 0.4s ease" }}>
+                    <div className="glass-panel" style={{ display: "flex", flexDirection: "column", height: 600, overflow: "hidden" }}>
+                      <div style={{ padding: 12, borderBottom: "1px solid rgba(0,212,255,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: "bold", fontFamily: "'Orbitron'", color: "white" }}>ENCLAVE COUNSELOR CHAT</div>
+                          <div style={{ fontSize: 9, color: "#7F9BB3", fontFamily: "'Share Tech Mono'" }}>{isOffline ? 'Operating on-device via local model gemma-4-e4b' : 'Connected standard secure channel path to server-side Gemma'}</div>
+                        </div>
+                        <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono'", color: isOffline ? "#FF7A18" : "#00D4FF", border: isOffline ? "1px solid rgba(255,122,24,0.3)" : "1px solid rgba(0,212,255,0.3)", padding: "2px 6px", borderRadius: 4 }}>
+                          {isOffline ? 'Off-Grid gemma-4' : 'Gemma Local Online'}
+                        </span>
+                      </div>
+
+                      <div style={{ flex: 1, padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, background: "rgba(0,0,0,0.1)" }} className="scroll-area">
+                        {aiLogs.map((log, index) => {
+                          const isArch = log.sender === 'architect';
+                          return (
+                            <div
+                              key={index}
+                              style={{ display: "flex", flexDirection: "column", maxWidth: "80%", alignSelf: isArch ? "flex-start" : "flex-end" }}
+                            >
+                              <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono'", color: "#7F9BB3", marginBottom: 2, alignSelf: isArch ? "flex-start" : "flex-end" }}>
+                                {isArch ? 'Architect Counselor' : 'Local Enclave Operator'} • {log.timestamp}
+                              </span>
+                              <div style={{ 
+                                padding: 10, 
+                                borderRadius: 12, 
+                                fontSize: 11, 
+                                fontFamily: "'Share Tech Mono'", 
+                                background: isArch ? "rgba(255,255,255,0.03)" : "rgba(0,212,255,0.05)", 
+                                border: isArch ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(0,212,255,0.1)", 
+                                color: isArch ? "#E8F4FF" : "#00D4FF",
+                                borderTopLeftRadius: isArch ? 0 : 12,
+                                borderTopRightRadius: isArch ? 12 : 0,
+                                whiteSpace: "pre-line",
+                                lineHeight: 1.5
+                              }}>
+                                {log.text}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {aiLoading && (
+                          <div style={{ display: "flex", flexDirection: "column", maxWidth: "80%", alignSelf: "flex-start" }}>
+                            <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono'", color: "#7F9BB3", marginBottom: 2 }}>Architect Counselor is thinking...</span>
+                            <div style={{ padding: 10, borderRadius: 12, borderTopLeftRadius: 0, fontSize: 11, fontFamily: "'Share Tech Mono'", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", color: "#7F9BB3" }} className="animate-pulse">
+                              Processing secure prompt matrices...
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <form onSubmit={handleAiInquiry} style={{ padding: 12, borderTop: "1px solid rgba(0,212,255,0.1)", display: "flex", gap: 8 }}>
+                        <input
+                          type="text"
+                          required
+                          disabled={aiLoading}
+                          value={aiPrompt}
+                          onChange={(e) => setAiPrompt(e.target.value)}
+                          placeholder="Inquire on biometric setups, cryptographic standards, leaks..."
+                          style={{ flex: 1, background: "rgba(0,0,0,0.3)", border: "1px solid rgba(0,212,255,0.1)", borderRadius: 6, padding: "8px 12px", color: "white", fontSize: 11, fontFamily: "'Share Tech Mono'", outline: "none" }}
+                        />
+                        <button
+                          type="submit"
+                          disabled={aiLoading}
+                          style={{ padding: "8px 16px", background: "#FF7A18", border: "none", color: "white", fontSize: 11, fontFamily: "'Share Tech Mono'", borderRadius: 6, fontWeight: "bold", cursor: "pointer" }}
+                        >
+                          Ask Counselor
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="glass-panel" style={{ padding: 16, display: "flex", flexDirection: "column", justifyContent: "space-between", height: 600 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        <h4 style={{ fontSize: 11, fontFamily: "'Orbitron'", color: "#7F9BB3", borderBottom: "1px solid rgba(0,212,255,0.1)", paddingBottom: 6 }}>SUGGESTED ENCLAVE DIRECTIVES</h4>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {[
+                            { question: "How does end-to-end encryption guard my documents?", key: "e2ee" },
+                            { question: "Explain the isolation of the 16 sandbox modules.", key: "sandbox" },
+                            { question: "What risk indicators does the tracker blocker audit?", key: "blocker" },
+                            { question: "Is gemma-4-e4b fully airgapped?", key: "gemma" }
+                          ].map((item) => (
+                            <button
+                              key={item.key}
+                              onClick={() => setAiPrompt(item.question)}
+                              style={{ width: "100%", textAlign: "left", padding: 10, background: "rgba(0,0,0,0.2)", border: "1px solid rgba(0,212,255,0.05)", borderRadius: 6, fontFamily: "'Share Tech Mono'", fontSize: 10, color: "#7F9BB3", cursor: "pointer", transition: "all 0.2s" }}
+                              className="hover:border-[#FF7A18] hover:text-white"
+                            >
+                              {item.question}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div style={{ background: "rgba(0,0,0,0.2)", border: "1px solid rgba(0,212,255,0.05)", padding: 12, borderRadius: 8, marginTop: 24 }}>
+                        <span style={{ fontSize: 9, color: "#FF7A18", fontFamily: "'Share Tech Mono'", fontWeight: "bold", display: "block", marginBottom: 4 }}>ON-DEVICE HARNESS DIRECTIVE</span>
+                        <p style={{ fontSize: 10, color: "#7F9BB3", fontFamily: "'Share Tech Mono'", lineHeight: 1.5 }}>
+                          Aegis Core incorporates a localized vector intelligence system (gemma-4-e4b) that parses inquiries without bridging external networks, protecting intellectual property from centralized data harvesting structures.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+
+          </main>
+        </div>
+        
+        {/* Bottom border gradient */}
+        <div style={{ height: 2, background: "linear-gradient(135deg, #FF2E9F 0%, #00D4FF 50%, #FF7A18 100%)", backgroundSize: "200% 100%", animation: "rotate-gradient 3s linear infinite reverse", flexShrink: 0 }} />
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-black text-neutral-300 flex flex-col font-mono selection:bg-fuchsia-500/30 selection:text-white">
       
@@ -651,7 +1185,8 @@ export default function App() {
 
       {/* Main App Workspace */}
       {!isLocked && (
-        <div className="flex-1 flex flex-col xl:flex-row relative">
+        currentDesign === 'agape' ? renderAgapeLayout() : (
+          <div className="flex-1 flex flex-col xl:flex-row relative">
           
           {/* Work Station Area */}
           <div className="flex-1 flex flex-col border-b xl:border-b-0 xl:border-r border-neutral-800">
@@ -700,22 +1235,30 @@ export default function App() {
                   <div className="h-8 w-8 rounded-full border-2 border-blue-500 bg-neutral-950 flex items-center justify-center font-bold text-xs text-blue-400 relative overflow-hidden group hover:border-fuchsia-500 transition-all cursor-pointer shadow-md">
                     <span className="relative z-10 font-bold font-sans">ID</span>
                     <div className="absolute inset-0 bg-neutral-900 layer opacity-10 group-hover:bg-fuchsia-950 transition-colors" />
-                  </div>                    {/* Revert Nuke Button */}
-                    {breachStatus === 'nuked' && (
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.96 }}
-                        onClick={handleRevertNuke}
-                        className="ml-4 px-3 py-1 text-xs bg-fuchsia-900/30 text-fuchsia-300 border border-fuchsia-500 rounded hover:bg-fuchsia-800 transition-colors"
-                      >
-                        Revert Last Nuke
-                      </motion.button>
-                    )}
-                    K
+                  </div>
+                  
+                  {/* Switch UI button */}
+                  <button
+                    onClick={toggleDesign}
+                    className="ml-2 px-2.5 py-1 text-[10px] bg-blue-950/50 text-blue-400 border border-blue-800/60 hover:border-blue-500 rounded hover:bg-blue-900/20 transition-all font-mono uppercase cursor-pointer"
+                  >
+                    ⟲ AGAPE UI
                   </button>
+
+                  {/* Revert Nuke Button */}
+                  {breachStatus === 'nuked' && (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.96 }}
+                      onClick={handleRevertNuke}
+                      className="ml-4 px-3 py-1 text-xs bg-fuchsia-900/30 text-fuchsia-300 border border-fuchsia-500 rounded hover:bg-fuchsia-800 transition-colors"
+                    >
+                      Revert Last Nuke
+                    </motion.button>
+                  )}
+                  </div>
                 </div>
-              </div>
-            </header>
+              </header>
 
             {/* Application Ribbons */}
             <div className="bg-neutral-900 border-b border-neutral-800 flex overflow-x-auto divide-r divide-neutral-800 custom-scrollbar">
@@ -824,10 +1367,10 @@ export default function App() {
 
                           <div className="flex flex-wrap items-center gap-3 pt-3">
                             <button
-                              onClick={() => setShowReportModal(true)}
+                              onClick={handleDownloadReport}
                               className="px-4 py-2 text-xs font-bold font-mono border border-blue-500/50 bg-blue-950/20 text-blue-400 hover:bg-blue-950/50 rounded-lg cursor-pointer transition uppercase"
                             >
-                              REPORT
+                              GENERATE SOVEREIGN IDENTITY TRUST REPORT
                             </button>
                             <button
                               onClick={handleNukeExplosion}
@@ -1272,7 +1815,7 @@ export default function App() {
           </aside>
 
         </div>
-      )}
+      ))}
 
       {/* SOVEREIGN REPORT MODAL OVERLAY */}
       <AnimatePresence>
@@ -1289,18 +1832,19 @@ export default function App() {
                   <FileText className="h-5 w-5 text-blue-400" />
                   <h3 className="text-xs font-bold uppercase tracking-wider text-white">Sovereign Encryption & Exposure Report</h3>
                 </div>
-                <button
-                  onClick={() => setShowReportModal(false)}
-                  className="p-1 text-xs text-neutral-500 hover:text-white cursor-pointer font-bold"
-                >
-                  [CLOSE]
-                </button>
-                <button
-                  onClick={downloadReport}
-                  className="p-1 text-xs text-neutral-500 hover:text-white cursor-pointer font-bold ml-2"
-                >
-                  [DOWNLOAD]
-                </button>
+                <div>
+                  <button
+                    onClick={() => setShowReportModal(false)}
+                    className="p-1 text-xs text-neutral-500 hover:text-white cursor-pointer font-bold"
+                  >
+                    [CLOSE]
+                  </button>
+                  <button
+                    onClick={handleDownloadReport}
+                    className="p-1 text-xs text-neutral-500 hover:text-white cursor-pointer font-bold ml-2"
+                  >
+                    [DOWNLOAD]
+                  </button>
                 </div>
               </div>
 
@@ -1368,25 +1912,3 @@ $ dig dkim._domainkey.agape.nyc TXT`}
   );
 }
 
-// Simple LayoutGrid placeholder because Lucide icon names vary between versions sometimes
-function LayoutGridIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect width="7" height="9" x="3" y="3" rx="1" />
-      <rect width="7" height="5" x="14" y="3" rx="1" />
-      <rect width="7" height="9" x="14" y="12" rx="1" />
-      <rect width="7" height="5" x="3" y="16" rx="1" />
-    </svg>
-  );
-}
